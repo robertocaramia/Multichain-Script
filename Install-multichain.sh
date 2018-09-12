@@ -1,7 +1,7 @@
 #!/bin/bash
 #### Description: Script to install or update Multichain following the Multichain instructions at https://www.multichain.com/download-install/.
 #### Written by: Roberto Caramia - robertocaramia@hotmail.com on 08-2018.
-#### Version: 0.1
+#### Version: 0.2
 #### License: GPL v3
 
 # Setting up the name of the temporary folder for storing the downloaded files.
@@ -14,7 +14,7 @@ echo "##########################################################################
 # install Multichain from scratch. If this is NOT your intent say S to skip  #
 # the installation/upgrade process or N to exit                              #
 ##############################################################################"
-read -p "Do you whant to continue ? y/s/N: " answer
+read -p "Do you want to continue ? y/s/N: " answer
 
 if [[ "$answer" = "Y" ]] || [[ "$answer" = "y" ]] ; then    
 
@@ -174,6 +174,42 @@ if [[ $NorO = "N" ]] || [[ $NorO = "n"  ]] ; then
     if [[ $EditParam = "N" ]] || [[ $EditParam = "n"  ]] ; then
         echo "- Ready to start with the new Chain $chainName"
     fi
+    read -p " - Do you want to edit multichain.conf parameters? y/Y or n/N default N: " McyN
+        if [[ $McyN = "Y" ]] || [[ $McyN = "y"  ]] ; then
+            
+            ChainConfFolder="$(dirname $chainPath)"
+            ChainConfFile="$ChainConfFolder/multichain.conf"
+            
+            read -p " - Set Username for the rpcuser: " rpcuser
+            read -p " - Set Password for the rpcuser: " rpcpassword
+            read -p " - Allow incoming JSON-RPC API connections from these IP addresses;
+- Values can be a single IP (e.g. 1.2.3.4), a network/netmask (e.g. 1.2.3.4/255.255.255.0) or a network/CIDR (e.g. 1.2.3.4/24);
+- Use multiple times to allow multiple IPs or ranges. : " rpcallowip
+            read -p " - Do you want to anable SSL support for the JSON-RPC interface? Set 1 for Active 0 for Disabled:  " rpcssl
+            
+            if [[ $rpcssl == "1" ]] ; then
+                read -p " - Set the Certificate (full path of the cert file): " rpcsslcertificatechainfile
+                read -p " - Set the Certificate private key (full path of the key file): " rpcsslprivatekeyfile
+                echo "rpcuser=$rpcuser" > $ChainConfFile
+                echo "rpcpassword=$rpcpassword" >> $ChainConfFile
+                echo "rpcallowip=$rpcallowip" >> $ChainConfFile
+                echo "rpcssl=1" >> $ChainConfFile
+                echo "rpcsslcertificatechainfile=$rpcsslcertificatechainfile" >> $ChainConfFile
+                echo "rpcsslprivatekeyfile=$rpcsslprivatekeyfile" >> $ChainConfFile
+                echo "rpcsslciphers=TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH" >> $ChainConfFile 
+                echo " - Setting the selected params into $ChainConfFile...."
+                echo " - Review the selected Configuration $(cat $ChainConfFile)"
+            else
+                echo "rpcuser=$rpcuser" > $ChainConfFile
+                echo "rpcpassword=$rpcpassword" >> $ChainConfFile
+                echo "rpcallowip=$rpcallowip" >> $ChainConfFile
+                echo " - Setting the selected params into $ChainConfFile...."
+                echo " - Review the selected Configuration in $ChainConfFile:"
+                echo ""
+                cat $ChainConfFile
+            fi
+        fi
+        
         read -p "- Do you want to start the new chain? y/Y or n/N default N: " StartChain
             if [[ $StartChain = "N" ]] || [[ $StartChain = "n"  ]] ; then
                echo " - Exiting... Stay safe!!!"
@@ -190,25 +226,22 @@ if [[ $NorO = "N" ]] || [[ $NorO = "n"  ]] ; then
                 CheckNewChain=$(ps -x | grep multichaind | grep $chainName | wc -l)
                 if [ $CheckNewChain == "1" ]; then
                 echo " - OK $chainName Started Enjoy!"
-                exit
                 else
                 echo " - Something goes wrong try starting the new chain manually:
                 - multichaind $chainName -daemon -datadir=$dirpath"
                 exit
                 fi
+                if [[ $rpcssl == "1" ]] ; then
+                    echo " - Check the JSON-RPC SSL interface insert the selected password when asked."
+                    rpcport=$(cat $chainPath | grep rpc-port | awk '{print $3}')
+                    curl --user $rpcuser --data-binary '{"jsonrpc": "1.0", "id":"curltest", "method": "getinfo", "params": [] }' -H 'content-type: application/json;' https://127.0.0.1:$rpcport/ -k
+                fi
             else
             echo " - Exiting... Stay safe!!!"
             exit
             fi
-    fi
 fi
-# TODO Manage rpc user/password ssl 
 
-#Here's the doc for the multichaind SSL parameters:
-#RPC SSL options
-#  -rpcssl                                  Use OpenSSL (https) for JSON-RPC connections
-#  -rpcsslcertificatechainfile=<file.cert>  Server certificate file (default: server.cert)
-#  -rpcsslprivatekeyfile=<file.pem>         Server private key (default: server.pem)
-#  -rpcsslciphers=<ciphers>                 Acceptable ciphers (default: TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH)
-                
- 
+# 
+# Generate self-signed certificate: 
+# openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
